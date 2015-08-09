@@ -16,7 +16,7 @@ DECLARE_string(agent_initd_bin);
 namespace baidu {
 namespace galaxy {
 
-InitdHandler::InitdHandler() {
+InitdHandler::InitdHandler() : status_(-1) {
    // TODO mvoe to pod manager
    port_ = RandRange(5000, 7999);
    rpc_client_.reset(new RpcClient());
@@ -212,10 +212,20 @@ void InitdHandler::InitdCallback(const Request* request,
     boost::scoped_ptr<const Request> ptr_request(request);
     boost::scoped_ptr<Response> ptr_response(response);
 
-    if (failed || error != 0 || ptr_response->status() != kOk) {
+    if (failed || error != 0) {
         LOG(WARNING, "initd rpc error[%d]", error);
+    } else {
+        LOG(INFO, "initd start success[%d]", port_);
+        status_ = 0;
     }
     return;
+}
+
+int InitdHandler::GetStatus() {
+    InitdHeartBeatRequest* request = new InitdHeartBeatRequest();
+    InitdHeartBeatResponse* response = new InitdHeartBeatResponse();
+    SendRequestToInitd(&Initd_Stub::InitdHeartBeat, request, response);
+    return status_;
 }
 
 } // ending namespace galaxy

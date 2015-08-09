@@ -31,15 +31,20 @@ public:
                  ::baidu::galaxy::ExecuteResponse* response,
                  ::google::protobuf::Closure* done);
 
-    void CreatePod(::google::protobuf::RpcController* controller,
-                   const ::baidu::galaxy::CreatePodRequest* request,
-                   ::baidu::galaxy::CreatePodResponse* response,
-                   ::google::protobuf::Closure* done);
+    // void CreatePod(::google::protobuf::RpcController* controller,
+    //                const ::baidu::galaxy::CreatePodRequest* request,
+    //                ::baidu::galaxy::CreatePodResponse* response,
+    //                ::google::protobuf::Closure* done);
 
-    void GetPodStatus(::google::protobuf::RpcController* controller,
-                      const ::baidu::galaxy::GetPodStatusRequest* request,
-                      ::baidu::galaxy::GetPodStatusResponse* response,
-                      ::google::protobuf::Closure* done);
+    // void GetPodStatus(::google::protobuf::RpcController* controller,
+    //                   const ::baidu::galaxy::GetPodStatusRequest* request,
+    //                   ::baidu::galaxy::GetPodStatusResponse* response,
+    //                   ::google::protobuf::Closure* done);
+
+    void InitdHeartBeat(::google::protobuf::RpcController* controller,
+                        const InitdHeartBeatRequest* request,
+                        InitdHeartBeatResponse* response, 
+                        ::google::protobuf::Closure* done);
 
     bool LoadProcessInfoCheckPoint(const ProcessInfoCheckpoint& checkpoint);
     bool DumpProcessInfoCheckPoint(ProcessInfoCheckpoint* checkpoint);
@@ -65,4 +70,3 @@ private:
 }   // ending namespace baidu
 
 #endif
-

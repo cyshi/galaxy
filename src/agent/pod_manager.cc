@@ -14,6 +14,9 @@ namespace galaxy {
 
 PodManager::PodManager() {
     task_manager_.reset(new TaskManager());
+    initd_check_thread_.reset(new common::Thread());
+    initd_check_thread_->Start(
+        boost::bind(&PodManager::LoopCheckPodInfos, this));
 }
 
 PodManager::~PodManager() {
@@ -34,14 +37,17 @@ int PodManager::Run(const PodDesc& pod) {
     }    
     }
 
-    // create intid handler
-    boost::shared_ptr<InitdHandler> handler(new InitdHandler());
-
     ret = file::Mkdir(FLAGS_gce_work_dir.c_str());
-
     if (ret != 0) {
         LOG(INFO, "work dir already exist[%s]", FLAGS_gce_work_dir.c_str());
     }
+    ret = file::Mkdir(FLAGS_gce_work_dir + "/" + pod.id);
+    if (ret != 0) {
+        LOG(INFO, "pod dir already exist[%s]", pod.id.c_str());
+    }
+
+    // create intid handler
+    boost::shared_ptr<InitdHandler> handler(new InitdHandler());
 
     // fork initd process
     ret = handler->Create(pod.id, FLAGS_gce_work_dir);
@@ -51,26 +57,25 @@ int PodManager::Run(const PodDesc& pod) {
         return ret;
     }
 
+    {
+    MutexLock lock(&handlers_mutex_);
+    initd_handlers_[pod.id] = handler;
+    }
+
+
     // create pod info
     boost::shared_ptr<PodInfo> pod_info(new PodInfo());
     pod_info->port = handler->GetPort();
     pod_info->desc = pod;
-
-    // std::vector<TaskDesc> tasks;
-    for (int i = 0; i < pod.desc.tasks_size(); ++i) {
-        TaskDesc desc; 
-        std::string taskid;
-        desc.task = pod.desc.tasks(i);
-        desc.initd_port = pod_info->port;
-        desc.root_dir = pod.id;
-        ret = task_manager_->CreateTask(desc, &taskid);
-        pod_info->tasksid.push_back(taskid);
-    }
+    // TODO
+    pod_info->status.set_state(kPodPending);
 
     {
     MutexLock lock(&infos_mutex_);
     pod_infos_[pod.id] = pod_info;
     }
+
+    LOG(INFO, "create pod[%s] success", pod.id.c_str());
 
     return ret;
 }
@@ -112,30 +117,6 @@ int PodManager::List(std::vector<std::string>* pod_ids) {
     return 0;
 }
 
-void PodManager::LoopCheckPodInfos() {
-    // while (true) {
-    //     PodHandlersType pod_handlers;
-    //     {
-    //     // copy pod handlers
-    //     MutexLock lock(&handlers_mutex_);
-    //     pod_handlers = pod_handlers_;
-    //     }
-
-    //     for (PodHandlersType::iterator it = pod_handlers.begin(); 
-    //          it != pod_handlers.end(); ++it) {
-    //         boost::shared_ptr<PodInfo> info;
-    //         it->second->Show(info);
-    //         // update internal pod info
-    //         {
-    //         MutexLock lock(&infos_mutex_);
-    //         pod_infos_[it->first] = info;
-    //         }
-    //     }
-    //     
-    //     sleep(FLAGS_agent_monitor_pods_interval * 1000L);
-    // }
-}
-
 int PodManager::DoPodOperation(const PodDesc& pod, 
                                const Operation op) {
     int ret = 0; 
@@ -169,6 +150,57 @@ int PodManager::DoPodOperation(const PodDesc& pod,
 
 int PodManager::FesibilityCheck(const Resource& resource) {
     return 0; 
+}
+
+void PodManager::LoopCheckPodInfos() {
+    while (true) {
+        {
+        MutexLock lock(&infos_mutex_);
+        for (PodInfosType::iterator it = pod_infos_.begin(); 
+             it != pod_infos_.end(); ++it) {
+            boost::shared_ptr<PodInfo>& info = it->second;
+
+            boost::shared_ptr<InitdHandler> handler;
+            {
+            MutexLock lock(&handlers_mutex_);
+            handler = initd_handlers_[it->first];
+            }
+
+            if (handler->GetStatus() == -1) {
+                LOG(INFO, "status -1");
+                // initd startup
+                info->status.set_state(kPodPending);
+                continue;
+            }
+
+            if (info->status.state() == kPodPending) {
+                const PodDesc& pod = info->desc;
+                int ret = 0;
+                for (int i = 0; i < pod.desc.tasks_size(); ++i) {
+                    std::string task_id;
+                    TaskDesc task_desc;
+                    task_desc.task.CopyFrom(pod.desc.tasks(i));
+                    task_desc.initd_port = handler->GetPort();
+                    task_desc.podid = pod.id;
+                    ret = task_manager_->CreateTask(task_desc, &task_id);
+                    if (ret != 0) {
+                        LOG(WARNING, "create pod[%s] task error[%s]", 
+                            pod.id.c_str(), task_id.c_str());
+                        break;
+                    }
+                    info->tasksid.push_back(task_id);
+                }
+
+                if (ret == 0) {
+                    LOG(INFO, "create pod[%s] success", pod.id.c_str());
+                    info->status.set_state(kPodDeploy);
+                }
+            }
+        }
+        }
+        // TODO parameter timeout
+        sleep(1);
+    }
 }
 
 }

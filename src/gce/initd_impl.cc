@@ -113,7 +113,7 @@ void InitdImpl::Execute(::google::protobuf::RpcController* controller,
     // 2. prepare std fds for child 
     int stdout_fd = 0;
     int stderr_fd = 0;
-    if (!process::PrepareStdFds(request->path(), 
+    if (!process::PrepareStdFds(request->path().c_str(), 
                                 &stdout_fd, &stderr_fd)) {
         if (stdout_fd != -1) {
             ::close(stdout_fd); 
@@ -184,6 +184,16 @@ void InitdImpl::Execute(::google::protobuf::RpcController* controller,
     }
     response->set_key(request->key());
     response->set_pid(child_pid);
+    response->set_status(kOk);
+    done->Run();
+    return;
+}
+
+    
+void InitdImpl::InitdHeartBeat(::google::protobuf::RpcController* controller,
+                          const InitdHeartBeatRequest* request,
+                          InitdHeartBeatResponse* response,
+                          ::google::protobuf::Closure* done) {
     response->set_status(kOk);
     done->Run();
     return;
@@ -272,18 +282,18 @@ bool InitdImpl::AttachCgroup(const std::string& cgroup_path,
 }
 
 
-void InitdImpl::CreatePod(::google::protobuf::RpcController* controller,
-                      const ::baidu::galaxy::CreatePodRequest* request,
-                      ::baidu::galaxy::CreatePodResponse* response,
-                      ::google::protobuf::Closure* done) {
-}
+// void InitdImpl::CreatePod(::google::protobuf::RpcController* controller,
+//                       const ::baidu::galaxy::CreatePodRequest* request,
+//                       ::baidu::galaxy::CreatePodResponse* response,
+//                       ::google::protobuf::Closure* done) {
+// }
 
 
-void InitdImpl::GetPodStatus(::google::protobuf::RpcController* controller,
-                         const ::baidu::galaxy::GetPodStatusRequest* request,
-                         ::baidu::galaxy::GetPodStatusResponse* response,
-                         ::google::protobuf::Closure* done) {
-}
+// void InitdImpl::GetPodStatus(::google::protobuf::RpcController* controller,
+//                          const ::baidu::galaxy::GetPodStatusRequest* request,
+//                          ::baidu::galaxy::GetPodStatusResponse* response,
+//                          ::google::protobuf::Closure* done) {
+// }
 
 bool InitdImpl::LoadProcessInfoCheckPoint(const ProcessInfoCheckpoint& checkpoint) {
     MutexLock scope_lock(&lock_);

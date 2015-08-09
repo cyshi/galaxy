@@ -24,7 +24,7 @@ namespace galaxy {
 struct TaskDesc {
     TaskDescriptor task;
     int initd_port;
-    std::string root_dir;
+    std::string podid;
 };
 
 struct TaskInfo {
@@ -57,8 +57,7 @@ public:
                            const uint32_t millicores);
 
     // copy from
-    int QueryTasks(const std::vector<std::string>& taskid, 
-                   std::vector<TaskInfo>* tasks);
+    int QueryTask(const std::string& taskid, TaskInfo* tasks);
 private:
 
     int Execute(const std::string& command);
@@ -69,7 +68,7 @@ private:
 
     void LoopCheckTaskStatus();
 
-    std::string GenerateTaskId(const std::string& root_dir);
+    std::string GenerateTaskId(const std::string& podid);
 
     int PrepareWorkspace(boost::shared_ptr<TaskInfo>& task);
 

@@ -52,13 +52,14 @@ private:
 
     int Delete(const std::string& podid);
 
-    void LoopCheckPodInfos();
 
     int FesibilityCheck(const Resource& resource);
 
     int DoPodOperation(const PodDesc& pod, const Operation op);
 
     int InstallPackage();
+
+    void LoopCheckPodInfos();
 
 private:
     Mutex infos_mutex_;
@@ -68,6 +69,8 @@ private:
     InitdHandlersType initd_handlers_;
 
     boost::scoped_ptr<TaskManager> task_manager_;
+
+    boost::scoped_ptr<common::Thread> initd_check_thread_;
 };
 
 }

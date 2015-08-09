@@ -30,10 +30,11 @@ TaskManager::~TaskManager() {
 int TaskManager::CreateTask(const TaskDesc& task, std::string* taskid) {
     const TaskDescriptor& task_desc = task.task;
     boost::shared_ptr<TaskInfo> task_info(new TaskInfo());
-    *taskid = GenerateTaskId(task.root_dir);
+    *taskid = GenerateTaskId(task.podid);
     task_info->desc.task.CopyFrom(task_desc);
     task_info->desc.initd_port = task.initd_port;
-    task_info->desc.root_dir = task.root_dir;
+    // task_info->desc.root_dir = task.root_dir;
+    task_info->desc.podid = task.podid;
     task_info->status.set_state(kPodPending);
     task_info->millicores = task_desc.requirement().millicores();
     task_info->taskid = *taskid;
@@ -57,6 +58,9 @@ int TaskManager::CreateTask(const TaskDesc& task, std::string* taskid) {
         return -1;
     }
 
+    LOG(INFO, "prepare task[%s] success, work_dir[%s]", 
+        taskid->c_str(), task_info->work_dir.c_str());
+
     // Execute
     ExecuteRequest* request = new ExecuteRequest();
     ExecuteResponse* response = new ExecuteResponse();
@@ -68,14 +72,14 @@ int TaskManager::CreateTask(const TaskDesc& task, std::string* taskid) {
 
     SendRequestToInitd(&Initd_Stub::Execute, 
                        request, response, task.initd_port);
+    LOG(INFO, "send request to initd[%d] command[%s]", 
+        task.initd_port, task.task.start_command().c_str());
 
     {
     // update tasks
     MutexLock lock(&tasks_mutex_);
     tasks_[*taskid] = task_info;
     }
-    LOG(INFO, "prepare task[%s] success, work_dir[%s]", 
-        taskid->c_str(), task_info->work_dir.c_str());
     return 0;
 }
 
@@ -89,8 +93,8 @@ int TaskManager::UpdateTaskCpuLimit(const std::string& taskid,
     return 0;
 }
 
-int QueryTasks(const std::vector<std::string>& taskid, 
-               std::vector<TaskInfo>* tasks) {
+int QueryTask(const std::string& taskid, 
+              TaskInfo* tasks) {
     return 0;
 }
 
@@ -102,11 +106,11 @@ int TaskManager::Execute(const std::string& command) {
 //     return 0;
 // }
 
-std::string TaskManager::GenerateTaskId(const std::string& root_dir) {
+std::string TaskManager::GenerateTaskId(const std::string& podid) {
     boost::uuids::uuid uuid = boost::uuids::random_generator()();    
     std::stringstream sm_uuid;
     sm_uuid << uuid;
-    std::string str_uuid = root_dir;
+    std::string str_uuid = podid;
     str_uuid.append("_");
     str_uuid.append(sm_uuid.str());
     return str_uuid;
@@ -114,23 +118,22 @@ std::string TaskManager::GenerateTaskId(const std::string& root_dir) {
 
 // TODO
 int TaskManager::PrepareWorkspace(boost::shared_ptr<TaskInfo>& task) {
-    std::string workspace_root(FLAGS_gce_work_dir);
-    workspace_root.append("/");
-    workspace_root.append(task->desc.root_dir);
-    LOG(INFO, "task root_dir[%s]", task->desc.root_dir.c_str());
-    if (!file::Mkdir(workspace_root)) {
-        LOG(WARNING, "mkdir workspace root failed[%s]:[%s, %d]", 
-            workspace_root.c_str(), strerror(errno), errno); 
-        // return -1;
-    }
-
-    std::string task_workspace(workspace_root);
+    std::string task_workspace("./");
+    task_workspace.append(task->desc.podid);
     task_workspace.append("/");
+    // LOG(INFO, "task root_dir[%s]", task->desc.root_dir.c_str());
+    // if (!file::Mkdir(workspace_root)) {
+    //     LOG(WARNING, "mkdir workspace root failed[%s]:[%s, %d]", 
+    //         workspace_root.c_str(), strerror(errno), errno); 
+    //     // return 0;
+    // }
+
+    // task_workspace.append("./");
     task_workspace.append(task->taskid);
-    if (!file::Mkdir(task_workspace)) {
+    if (!file::Mkdir(FLAGS_gce_work_dir + "/" + task_workspace)) {
         LOG(WARNING, "mkdir task workspace failed[%s]:[%s, %d]", 
             task_workspace.c_str(), strerror(errno), errno);
-        // return -1;
+        // return 0;
     }
     task->work_dir = task_workspace;
     return 0;
@@ -189,9 +192,10 @@ void TaskManager::InitdCallback(const Request* request,
     boost::scoped_ptr<const Request> ptr_request(request);
     boost::scoped_ptr<Response> ptr_response(response);
 
-    if (failed || error != 0 || ptr_response->status() != kOk) {
+    if (failed || error != 0) {
         LOG(WARNING, "initd rpc error[%d]", error);
     }
+
     return;
 }
 
@@ -201,6 +205,7 @@ void TaskManager::LoopCheckTaskStatus() {
         MutexLock lock(&tasks_mutex_);
         for (TasksType::iterator it = tasks_.begin(); 
              it != tasks_.end(); ++it) {
+            LOG(INFO, "get task[%s] status", it->second->taskid.c_str());
             GetProcessStatusRequest* request = new GetProcessStatusRequest();
             GetProcessStatusResponse* response = new GetProcessStatusResponse();
 
@@ -210,7 +215,7 @@ void TaskManager::LoopCheckTaskStatus() {
                                request, response, port);
         }
         }
-        sleep(FLAGS_agent_monitor_tasks_interval * 1000);
+        sleep(FLAGS_agent_monitor_tasks_interval);
     }
 }
 
@@ -218,12 +223,19 @@ template <>
 void TaskManager::InitdCallback(const GetProcessStatusRequest* request, 
                                 GetProcessStatusResponse* response, 
                                 bool failed, int error) {
+
+    // LOG(INFO, "get process status callback[%s]", request->key().c_str());
+
     boost::scoped_ptr<const GetProcessStatusRequest> ptr_request(request);
     boost::scoped_ptr<GetProcessStatusResponse> ptr_response(response);
 
-    if (failed || error != 0 || ptr_response->status() != kOk) {
+    if (failed || error != 0) {
         LOG(WARNING, "initd rpc error[%d]", error);
+        return;
     }
+
+    LOG(INFO, "process[%s] status[%d]", request->key().c_str(), ptr_response->status());
+
     return;
 }
 

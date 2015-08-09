@@ -2,6 +2,7 @@
 #define INITDHANDLER_H
 
 #include <sofa/pbrpc/pbrpc.h>
+#include <boost/atomic.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #include "rpc/rpc_client.h"
@@ -30,6 +31,8 @@ public:
     
     int Create(const std::string& podid, 
                const std::string& work_dir);
+
+    int GetStatus();
 
     int GetPort() {
         return port_;
@@ -68,6 +71,8 @@ private:
 
     // initd listen port
     int port_;
+
+    boost::atomic<int> status_;
 };
 
 }

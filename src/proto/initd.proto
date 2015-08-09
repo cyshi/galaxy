@@ -60,6 +60,13 @@ message UMountPathResponse {
     optional Status status = 2;
 }
 
+message InitdHeartBeatRequest {
+}
+
+message InitdHeartBeatResponse {
+    optional Status status = 1;
+}
+
 service Initd {
     // deprecated
     rpc GetProcessStatus(GetProcessStatusRequest) returns (GetProcessStatusResponse);
@@ -67,4 +74,6 @@ service Initd {
     rpc Execute(ExecuteRequest) returns (ExecuteResponse);
     rpc MountPath(MountPathRequest) returns (MountPathResponse);    
     rpc UMountPath(UMountPathRequest) returns (UMountPathResponse);
+
+    rpc InitdHeartBeat(InitdHeartBeatRequest) returns (InitdHeartBeatResponse);
 }
